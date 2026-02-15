@@ -21,10 +21,18 @@ module SqlitePurerb
               end
             when AST::Column
               col_name = col.name.downcase
-              col_index = table_columns.index { |c| c.downcase == col_name }
-              raise "Column not found: #{col.name}" unless col_index
-              output_name = col.alias_name || col.name
-              columns << { original_name: col.name, output_name: output_name, column_index: col_index }
+              if %w[rowid _rowid_ oid].include?(col_name) && !table_columns.any? { |c| c.downcase == col_name }
+                output_name = col.alias_name || col.name
+                columns << { output_name: output_name, column_index: :rowid }
+              else
+                col_index = table_columns.index { |c| c.downcase == col_name }
+                raise "Column not found: #{col.name}" unless col_index
+                output_name = col.alias_name || col.name
+                columns << { original_name: col.name, output_name: output_name, column_index: col_index }
+              end
+            when AST::ExprColumn
+              output_name = col.result_name
+              columns << { output_name: output_name, column_index: nil, expr: col.expr }
             when AST::FunctionCall
               arg_col_indices = col.args.map do |arg|
                 case arg

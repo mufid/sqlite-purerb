@@ -56,6 +56,7 @@ module SqlitePurerb
         record_layout.each_with_index do |entry, pos|
           col_to_record_pos[entry[:col_index]] = pos if entry[:col_index]
         end
+        rowid_record_pos = record_layout.index { |e| e[:type] == :rowid }
 
         # Emit in reverse output order
         output_columns.reverse.each_with_index do |col, rev_i|
@@ -64,6 +65,9 @@ module SqlitePurerb
 
           if col[:expr]
             emit_function_from_cursor(pseudo_cursor, col, reg, col_to_record_pos, has_rowid_pk)
+          elsif col[:column_index] == :rowid && rowid_record_pos
+            @program.add(OP::COLUMN, p1: pseudo_cursor, p2: rowid_record_pos, p3: reg,
+                         comment: "r[#{reg}]=rowid")
           else
             col_index = col[:column_index]
             record_pos = col_to_record_pos[col_index]
@@ -84,6 +88,7 @@ module SqlitePurerb
           next if entry[:type] == :sequence
           col_to_record_pos[entry[:col_index]] = pos if entry[:col_index]
         end
+        rowid_record_pos = record_layout.index { |e| e[:type] == :rowid }
 
         # Emit in reverse output order
         output_columns.reverse.each_with_index do |col, rev_i|
@@ -92,6 +97,9 @@ module SqlitePurerb
 
           if col[:expr]
             emit_function_from_cursor(ephemeral_cursor, col, reg, col_to_record_pos, has_rowid_pk)
+          elsif col[:column_index] == :rowid && rowid_record_pos
+            @program.add(OP::COLUMN, p1: ephemeral_cursor, p2: rowid_record_pos, p3: reg,
+                         comment: "r[#{reg}]=rowid")
           else
             col_index = col[:column_index]
             record_pos = col_to_record_pos[col_index]
@@ -108,8 +116,11 @@ module SqlitePurerb
                                    column_affinities, has_rowid_pk)
         output_columns.each_with_index do |col, i|
           if col[:expr]
-            emit_function_column(cursor, col, result_base + i, table_name, table_columns,
-                                column_affinities, has_rowid_pk)
+            emit_expr(col[:expr], cursor, table_columns, column_affinities, has_rowid_pk,
+                      result_base + i, table_name)
+          elsif col[:column_index] == :rowid
+            @program.add(OP::ROWID, p1: cursor, p2: result_base + i,
+                         comment: "r[#{result_base + i}]=#{table_name}.rowid")
           else
             col_index = col[:column_index]
             if col_index == 0 && has_rowid_pk
@@ -173,6 +184,175 @@ module SqlitePurerb
         @program.add(OP::FUNCTION, p1: arg_base, p2: 0, p3: dest_reg,
                      p4: func.name.downcase, p5: arg_indices.length,
                      comment: "r[#{dest_reg}]=#{func.name.downcase}(r[#{arg_base}])")
+      end
+
+      # General expression evaluator - emits opcodes to compute expr result into dest_reg
+      def emit_expr(expr, cursor, table_columns, column_affinities, has_rowid_pk, dest_reg,
+                    table_name = nil)
+        case expr
+        when AST::ColumnRef
+          emit_column_ref_expr(expr, cursor, table_columns, column_affinities, has_rowid_pk,
+                               dest_reg, table_name)
+        when AST::Literal
+          emit_literal_expr(expr, dest_reg)
+        when AST::BinaryExpr
+          emit_binary_expr(expr, cursor, table_columns, column_affinities, has_rowid_pk, dest_reg,
+                           table_name)
+        when AST::UnaryExpr
+          emit_unary_expr(expr, cursor, table_columns, column_affinities, has_rowid_pk, dest_reg,
+                          table_name)
+        when AST::FunctionCall
+          col_info = resolve_function_for_emit(expr, table_columns)
+          emit_function_column(cursor, col_info, dest_reg, table_name, table_columns,
+                               column_affinities, has_rowid_pk)
+        else
+          raise "Unsupported expression in emit_expr: #{expr.class}"
+        end
+      end
+
+      def emit_column_ref_expr(expr, cursor, table_columns, column_affinities, has_rowid_pk,
+                               dest_reg, table_name)
+        col_name = expr.name.downcase
+        if %w[rowid _rowid_ oid].include?(col_name) && !table_columns.any? { |c| c.downcase == col_name }
+          @program.add(OP::ROWID, p1: cursor, p2: dest_reg,
+                       comment: "r[#{dest_reg}]=#{table_name || 'table'}.rowid")
+        else
+          col_index = table_columns.index { |c| c.downcase == col_name }
+          raise "Column not found: #{expr.name}" unless col_index
+          @max_col_index = col_index if col_index > @max_col_index
+          @program.add(OP::COLUMN, p1: cursor, p2: col_index, p3: dest_reg,
+                       comment: "r[#{dest_reg}]= cursor #{cursor} column #{col_index}")
+          if column_affinities[col_index] == :real
+            @program.add(OP::REAL_AFFINITY, p1: dest_reg)
+          end
+        end
+      end
+
+      def emit_literal_expr(expr, dest_reg)
+        case expr.value
+        when Integer
+          @program.add(OP::INTEGER, p1: expr.value, p2: dest_reg,
+                       comment: "r[#{dest_reg}]=#{expr.value}")
+        when String
+          @program.add(OP::STRING8, p2: dest_reg, p4: expr.value,
+                       comment: "r[#{dest_reg}]='#{expr.value}'")
+        when nil
+          @program.add(OP::NULL, p2: dest_reg,
+                       comment: "r[#{dest_reg}]=NULL")
+        else
+          @program.add(OP::INTEGER, p1: expr.value.to_i, p2: dest_reg,
+                       comment: "r[#{dest_reg}]=#{expr.value}")
+        end
+      end
+
+      def emit_binary_expr(expr, cursor, table_columns, column_affinities, has_rowid_pk, dest_reg,
+                           table_name)
+        left_reg = allocate_register
+        right_reg = allocate_register
+        emit_expr(expr.left, cursor, table_columns, column_affinities, has_rowid_pk, left_reg,
+                  table_name)
+        emit_expr(expr.right, cursor, table_columns, column_affinities, has_rowid_pk, right_reg,
+                  table_name)
+
+        case expr.operator
+        when '=', '==', '!=', '<', '<=', '>', '>='
+          mode = comparison_affinity_mode(expr, table_columns, column_affinities)
+          op_name = { '=' => 'eq', '==' => 'eq', '!=' => 'ne',
+                      '<' => 'lt', '<=' => 'le', '>' => 'gt', '>=' => 'ge' }[expr.operator]
+          @program.add(OP::FUNCTION, p1: left_reg, p2: 0, p3: dest_reg,
+                       p4: "_cmp_#{op_name}_#{mode}", p5: 2,
+                       comment: "r[#{dest_reg}]=r[#{left_reg}]#{expr.operator}r[#{right_reg}]")
+        when '+', '-', '*', '/', '%', '||'
+          @program.add(OP::FUNCTION, p1: left_reg, p2: 0, p3: dest_reg,
+                       p4: "_arith_#{expr.operator}", p5: 2,
+                       comment: "r[#{dest_reg}]=r[#{left_reg}]#{expr.operator}r[#{right_reg}]")
+        else
+          raise "Unsupported binary operator in expression: #{expr.operator}"
+        end
+      end
+
+      def emit_unary_expr(expr, cursor, table_columns, column_affinities, has_rowid_pk, dest_reg,
+                          table_name)
+        case expr.operator
+        when '+'
+          # Unary plus is a no-op (strips affinity but we evaluate the operand raw)
+          emit_expr(expr.operand, cursor, table_columns, column_affinities, has_rowid_pk, dest_reg,
+                    table_name)
+        when '-'
+          operand_reg = allocate_register
+          emit_expr(expr.operand, cursor, table_columns, column_affinities, has_rowid_pk,
+                    operand_reg, table_name)
+          @program.add(OP::FUNCTION, p1: operand_reg, p2: 0, p3: dest_reg,
+                       p4: '_negate', p5: 1,
+                       comment: "r[#{dest_reg}]=-r[#{operand_reg}]")
+        end
+      end
+
+      NUMERIC_AFFINITIES = %i[numeric integer real].freeze
+
+      # Determine the type affinity of an expression (mirrors sqlite3ExprAffinity in C)
+      # Column references return their declared affinity; expressions/literals return :none
+      def expr_affinity(expr, table_columns, column_affinities)
+        case expr
+        when AST::ColumnRef
+          col_name = expr.name.downcase
+          if %w[rowid _rowid_ oid].include?(col_name) && !table_columns.any? { |c| c.downcase == col_name }
+            :integer
+          else
+            col_index = table_columns.index { |c| c.downcase == col_name }
+            return :none unless col_index
+            column_affinities[col_index] || :blob
+          end
+        when AST::UnaryExpr
+          :none # unary + strips affinity
+        else
+          :none # literals, function calls, binary exprs have no affinity
+        end
+      end
+
+      # Determine comparison affinity mode (mirrors sqlite3CompareAffinity in C)
+      # Returns :numeric, :text, or :blob
+      def comparison_affinity_mode(expr, table_columns, column_affinities)
+        left_aff = expr_affinity(expr.left, table_columns, column_affinities)
+        right_aff = expr_affinity(expr.right, table_columns, column_affinities)
+
+        left_is_col = left_aff != :none
+        right_is_col = right_aff != :none
+
+        if left_is_col && right_is_col
+          # Both sides are columns with affinity
+          if NUMERIC_AFFINITIES.include?(left_aff) || NUMERIC_AFFINITIES.include?(right_aff)
+            :numeric
+          else
+            :blob
+          end
+        else
+          # At least one side has no affinity - use the column's affinity
+          col_aff = left_is_col ? left_aff : (right_is_col ? right_aff : :none)
+          case col_aff
+          when :integer, :real, :numeric then :numeric
+          when :text then :text
+          else :blob
+          end
+        end
+      end
+
+      def resolve_function_for_emit(func, table_columns)
+        arg_col_indices = func.args.map do |arg|
+          case arg
+          when AST::ColumnRef
+            idx = table_columns.index { |c| c.downcase == arg.name.downcase }
+            raise "Column not found: #{arg.name}" unless idx
+            idx
+          when AST::Star
+            :star
+          when AST::Literal
+            :literal
+          else
+            raise "Unsupported function argument: #{arg.class}"
+          end
+        end
+        { expr: func, arg_col_indices: arg_col_indices }
       end
 
       # Emit the epilogue: Halt, Transaction, deferred constants, Goto

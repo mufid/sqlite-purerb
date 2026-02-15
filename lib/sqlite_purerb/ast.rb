@@ -145,6 +145,43 @@ module SqlitePurerb
       end
     end
 
+    # Represents a general expression as a SELECT column
+    class ExprColumn < Node
+      attr_accessor :expr, :alias_name
+
+      def initialize(expr, alias_name = nil)
+        @expr = expr
+        @alias_name = alias_name
+      end
+
+      def result_name
+        @alias_name || expr_to_sql(@expr)
+      end
+
+      private
+
+      def expr_to_sql(node)
+        case node
+        when ColumnRef then node.name
+        when Literal then node.value.nil? ? 'NULL' : node.value.to_s
+        when BinaryExpr then "#{expr_to_sql(node.left)}#{node.operator}#{expr_to_sql(node.right)}"
+        when UnaryExpr then "#{node.operator}#{expr_to_sql(node.operand)}"
+        when FunctionCall then node.result_name
+        else node.to_s
+        end
+      end
+    end
+
+    # Represents a unary expression (e.g., -x, +x)
+    class UnaryExpr < Node
+      attr_accessor :operator, :operand
+
+      def initialize(operator, operand)
+        @operator = operator
+        @operand = operand
+      end
+    end
+
     # Represents a function call (e.g., typeof(xi), count(*))
     class FunctionCall < Node
       attr_accessor :name, :args, :alias_name

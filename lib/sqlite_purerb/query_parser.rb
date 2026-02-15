@@ -65,14 +65,26 @@ module SqlitePurerb
           next
         end
 
-        # Operators
-        case sql[pos, 2]
-        when '!=', '<>', '<=', '>='
-          tokens << [sql[pos, 2].to_sym, sql[pos, 2]]
-          pos += 2
-          next
+        # Two-character operators
+        if pos + 1 < sql.length
+          two = sql[pos, 2]
+          case two
+          when '!=', '<>', '<=', '>='
+            tokens << [two.to_sym, two]
+            pos += 2
+            next
+          when '=='
+            tokens << [:EQ, '==']
+            pos += 2
+            next
+          when '||'
+            tokens << [:CONCAT, '||']
+            pos += 2
+            next
+          end
         end
 
+        # Single-character operators
         case sql[pos]
         when '*'
           tokens << [:STAR, '*']
@@ -90,6 +102,14 @@ module SqlitePurerb
           tokens << [:GT, '>']
         when ';'
           tokens << [:SEMI, ';']
+        when '+'
+          tokens << [:PLUS, '+']
+        when '-'
+          tokens << [:MINUS, '-']
+        when '/'
+          tokens << [:SLASH, '/']
+        when '%'
+          tokens << [:PERCENT, '%']
         else
           raise ParseError, "Unexpected character: #{sql[pos]}"
         end
@@ -190,16 +210,11 @@ module SqlitePurerb
       columns
     end
 
+    # Parse a SELECT column: expression with optional alias
     def parse_column
-      # Check for function call: ID followed by LPAREN
-      if peek(:ID) && @tokens[@current + 1]&.first == :LPAREN
-        return parse_function_call_column
-      end
+      expr = parse_expr
 
-      name = expect(:ID)[1]
       alias_name = nil
-
-      # Check for alias (with or without AS)
       if accept(:AS)
         alias_name = expect(:ID)[1]
       elsif peek(:ID)
@@ -207,34 +222,15 @@ module SqlitePurerb
         alias_name = accept(:ID)[1]
       end
 
-      AST::Column.new(name, alias_name)
-    end
-
-    def parse_function_call_column
-      name = expect(:ID)[1]
-      expect(:LPAREN)
-      args = []
-      unless peek(:RPAREN)
-        loop do
-          if peek(:STAR)
-            accept(:STAR)
-            args << AST::Star.new
-          else
-            args << parse_expr
-          end
-          break unless accept(:COMMA)
-        end
+      case expr
+      when AST::ColumnRef
+        AST::Column.new(expr.name, alias_name)
+      when AST::FunctionCall
+        expr.alias_name = alias_name
+        expr
+      else
+        AST::ExprColumn.new(expr, alias_name)
       end
-      expect(:RPAREN)
-
-      alias_name = nil
-      if accept(:AS)
-        alias_name = expect(:ID)[1]
-      elsif peek(:ID)
-        alias_name = accept(:ID)[1]
-      end
-
-      AST::FunctionCall.new(name, args, alias_name)
     end
 
     def parse_order_by_list
@@ -252,6 +248,16 @@ module SqlitePurerb
       end
       terms
     end
+
+    # Expression grammar with proper precedence (lowest to highest):
+    #   expr           → or_expr
+    #   or_expr        → and_expr ('OR' and_expr)*
+    #   and_expr       → comparison ('AND' comparison)*
+    #   comparison     → addition (comp_op addition | IS ... | IN ...)?
+    #   addition       → multiplication (('+' | '-' | '||') multiplication)*
+    #   multiplication → unary (('*' | '/' | '%') unary)*
+    #   unary          → ('+' | '-') unary | primary
+    #   primary        → ID ['(' args ')'] | NUMBER | STRING | NULL | '(' expr ')'
 
     def parse_expr
       parse_or_expr
@@ -280,7 +286,7 @@ module SqlitePurerb
     end
 
     def parse_comparison
-      left = parse_primary
+      left = parse_addition
 
       # Handle IS NULL / IS NOT NULL / IS value / IS NOT value
       if accept(:IS)
@@ -289,7 +295,7 @@ module SqlitePurerb
             accept(:NULL)
             return AST::IsNotNullExpr.new(left)
           else
-            right = parse_primary
+            right = parse_addition
             return AST::IsNotExpr.new(left, right)
           end
         else
@@ -297,7 +303,7 @@ module SqlitePurerb
             accept(:NULL)
             return AST::IsNullExpr.new(left)
           else
-            right = parse_primary
+            right = parse_addition
             return AST::IsExpr.new(left, right)
           end
         end
@@ -308,7 +314,7 @@ module SqlitePurerb
         expect(:LPAREN)
         values = []
         loop do
-          values << parse_primary
+          values << parse_addition
           break unless accept(:COMMA)
         end
         expect(:RPAREN)
@@ -333,10 +339,64 @@ module SqlitePurerb
       end
 
       if op
-        right = parse_primary
+        right = parse_addition
         AST::BinaryExpr.new(left, op, right)
       else
         left
+      end
+    end
+
+    def parse_addition
+      left = parse_multiplication
+
+      while true
+        if accept(:PLUS)
+          right = parse_multiplication
+          left = AST::BinaryExpr.new(left, '+', right)
+        elsif accept(:MINUS)
+          right = parse_multiplication
+          left = AST::BinaryExpr.new(left, '-', right)
+        elsif accept(:CONCAT)
+          right = parse_multiplication
+          left = AST::BinaryExpr.new(left, '||', right)
+        else
+          break
+        end
+      end
+
+      left
+    end
+
+    def parse_multiplication
+      left = parse_unary
+
+      while true
+        if accept(:STAR)
+          right = parse_unary
+          left = AST::BinaryExpr.new(left, '*', right)
+        elsif accept(:SLASH)
+          right = parse_unary
+          left = AST::BinaryExpr.new(left, '/', right)
+        elsif accept(:PERCENT)
+          right = parse_unary
+          left = AST::BinaryExpr.new(left, '%', right)
+        else
+          break
+        end
+      end
+
+      left
+    end
+
+    def parse_unary
+      if accept(:PLUS)
+        operand = parse_unary
+        AST::UnaryExpr.new('+', operand)
+      elsif accept(:MINUS)
+        operand = parse_unary
+        AST::UnaryExpr.new('-', operand)
+      else
+        parse_primary
       end
     end
 

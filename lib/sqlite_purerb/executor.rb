@@ -59,9 +59,7 @@ module SqlitePurerb
         case col
         when AST::Star
           table_columns.map { |c| AST::Column.new(c) }
-        when AST::Column
-          [col]
-        when AST::FunctionCall
+        when AST::Column, AST::FunctionCall, AST::ExprColumn
           [col]
         else
           raise "Unknown column type: #{col.class}"
