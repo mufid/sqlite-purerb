@@ -1,0 +1,72 @@
+id|col_integer|col_int|col_tinyint|col_smallint|col_mediumint|col_bigint|col_unsigned_big_int|col_int2|col_int4|col_int8
+1|42|42|7|1000|100000|9999999999999|42|99|42|42
+2|-1|-1|-128|-32768|-8388608|-140737488355328|-1|-99|-42|-42
+3||||||||||
+4|127|-128|32767|-32768|8388607|-8388608|2147483647|-2147483648|140737488355327|-140737488355328
+5|9223372036854775807|-9223372036854775808|0|0|0|0|1|0|0|0
+id|col_text|col_character|col_varchar|col_varying_character|col_nchar|col_native_character|col_nvarchar|col_clob
+1|hello world|character val|varchar value|varying char val|nchar value|native char val|nvarchar value|clob value
+2|||negative test|||||
+3||||||||
+4|a|b|c|d|e|f|g|h
+5|The quick brown fox jumps over the lazy dog. This is a longer text value to test text storage.|short|medium length string here|another varying|nchar test|native test|nvarchar test|Another clob with multiple words in it.
+id|col_real|col_double|col_double_precision|col_float
+1|3.14|2.71828|1.23456789|1.5
+2|-3.14|-0.001|-1.23456789|0.0
+3||||
+4|1.79769313486232e+308|-1.79769313486232e+308|2.2250738585072e-308|0.0
+5|0.0|0.0|0.0|0.0
+id|col_numeric|col_decimal|col_boolean|col_date|col_datetime|col_timestamp|col_json|col_jsonb
+1|12345|99.99|1|2025-06-15|2025-06-15 10:30:00|2025-06-15 10:30:00|{"name":"Alice","age":30}|{"name":"Alice"}
+2|-1|-99.99|0|1970-01-01|1970-01-01 00:00:00|1970-01-01 00:00:00|[]|[]
+3||||||||
+4|2147483647|0.01|1|9999-12-31|9999-12-31 23:59:59|0001-01-01 00:00:00|{"n":2147483647}|{"n":0}
+5|0|0|0|2000-01-01|2000-06-15 12:00:00|2000-06-15 12:00:00|{"nested":{"a":1}}|{"x":"y"}
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     44    0                    0   Start at 44
+1     OpenRead       0     2     0     34             0   root=2 iDb=0; all_types
+2     Rewind         0     43    0                    0   
+3       Rowid          0     1     0                    0   r[1]=all_types.rowid
+4       Column         0     1     2                    0   r[2]= cursor 0 column 1
+5       Column         0     2     3                    0   r[3]= cursor 0 column 2
+6       Column         0     3     4                    0   r[4]= cursor 0 column 3
+7       Column         0     4     5                    0   r[5]= cursor 0 column 4
+8       Column         0     5     6                    0   r[6]= cursor 0 column 5
+9       Column         0     6     7                    0   r[7]= cursor 0 column 6
+10      Column         0     7     8                    0   r[8]= cursor 0 column 7
+11      Column         0     8     9                    0   r[9]= cursor 0 column 8
+12      Column         0     9     10                   0   r[10]= cursor 0 column 9
+13      Column         0     10    11                   0   r[11]= cursor 0 column 10
+14      Column         0     11    12                   0   r[12]= cursor 0 column 11
+15      Column         0     12    13                   0   r[13]= cursor 0 column 12
+16      Column         0     13    14                   0   r[14]= cursor 0 column 13
+17      Column         0     14    15                   0   r[15]= cursor 0 column 14
+18      Column         0     15    16                   0   r[16]= cursor 0 column 15
+19      Column         0     16    17                   0   r[17]= cursor 0 column 16
+20      Column         0     17    18                   0   r[18]= cursor 0 column 17
+21      Column         0     18    19                   0   r[19]= cursor 0 column 18
+22      Column         0     19    20                   0   r[20]= cursor 0 column 19
+23      Column         0     20    21                   0   r[21]= cursor 0 column 20
+24      Column         0     21    22                   0   r[22]= cursor 0 column 21
+25      Column         0     22    23                   0   r[23]= cursor 0 column 22
+26      RealAffinity   23    0     0                    0   
+27      Column         0     23    24                   0   r[24]= cursor 0 column 23
+28      RealAffinity   24    0     0                    0   
+29      Column         0     24    25                   0   r[25]= cursor 0 column 24
+30      RealAffinity   25    0     0                    0   
+31      Column         0     25    26                   0   r[26]= cursor 0 column 25
+32      RealAffinity   26    0     0                    0   
+33      Column         0     26    27                   0   r[27]= cursor 0 column 26
+34      Column         0     27    28                   0   r[28]= cursor 0 column 27
+35      Column         0     28    29                   0   r[29]= cursor 0 column 28
+36      Column         0     29    30                   0   r[30]= cursor 0 column 29
+37      Column         0     30    31                   0   r[31]= cursor 0 column 30
+38      Column         0     31    32                   0   r[32]= cursor 0 column 31
+39      Column         0     32    33                   0   r[33]= cursor 0 column 32
+40      Column         0     33    34                   0   r[34]= cursor 0 column 33
+41      ResultRow      1     34    0                    0   output=r[1..34]
+42    Next           0     3     0                    1   
+43    Halt           0     0     0                    0   
+44    Transaction    0     0     1     0              1   usesStmtJournal=0
+45    Goto           0     1     0                    0   

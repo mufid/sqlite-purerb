@@ -1,0 +1,7 @@
+.headers on
+.mode list
+SELECT id, col_integer, col_int, col_tinyint, col_smallint, col_mediumint, col_bigint, col_unsigned_big_int, col_int2, col_int4, col_int8 FROM all_types;
+SELECT id, col_text, col_character, col_varchar, col_varying_character, col_nchar, col_native_character, col_nvarchar, col_clob FROM all_types;
+SELECT id, col_real, col_double, col_double_precision, col_float FROM all_types;
+SELECT id, col_numeric, col_decimal, col_boolean, col_date, col_datetime, col_timestamp, col_json, col_jsonb FROM all_types;
+EXPLAIN SELECT * FROM all_types;
