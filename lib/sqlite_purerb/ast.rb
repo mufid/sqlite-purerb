@@ -96,5 +96,23 @@ module SqlitePurerb
         @right = right
       end
     end
+
+    # Represents IS NULL expression
+    class IsNullExpr < Node
+      attr_accessor :operand
+
+      def initialize(operand)
+        @operand = operand
+      end
+    end
+
+    # Represents IS NOT NULL expression
+    class IsNotNullExpr < Node
+      attr_accessor :operand
+
+      def initialize(operand)
+        @operand = operand
+      end
+    end
   end
 end

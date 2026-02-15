@@ -26,12 +26,22 @@ module SqlitePurerb
         # WHERE filter
         where_jump = nil
         and_jumps = []
+        @or_output_jumps = []
         if stmt.where_clause
           where_jump = compile_where_filter(stmt.where_clause, cursor, table_columns, column_affinities, alias_map, and_jumps)
         end
 
         # Read output columns
         result_base = allocate_registers(output_columns.length)
+
+        # Patch OR output jumps to point to the output block
+        output_addr = @program.instructions.length
+        @or_output_jumps.each do |addr|
+          @program.patch(addr, p2: output_addr)
+          instr = @program.instructions[addr]
+          instr.comment = instr.comment.sub('%s', output_addr.to_s) if instr.comment
+        end
+
         emit_read_output_columns(cursor, output_columns, result_base, table_name, table_columns,
                                  column_affinities, has_rowid_pk)
 

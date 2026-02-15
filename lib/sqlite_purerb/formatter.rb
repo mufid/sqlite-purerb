@@ -60,12 +60,18 @@ module SqlitePurerb
       lines = []
 
       # Header
-      header_parts = EXPLAIN_HEADERS.each_with_index.map { |h, i| h.ljust(widths[i]) }
-      lines << header_parts.join(gap)
+      header_parts = EXPLAIN_HEADERS[0..5].each_with_index.map { |h, i| h.ljust(widths[i]) }
+      header_line = header_parts.join(gap) + gap +
+                    EXPLAIN_HEADERS[6].ljust(widths[6] + gap.length) +
+                    EXPLAIN_HEADERS[7].ljust(widths[7])
+      lines << header_line
 
       # Separator
-      sep_parts = widths.map { |w| '-' * w }
-      lines << sep_parts.join(gap)
+      sep_parts = widths[0..5].map { |w| '-' * w }
+      sep_line = sep_parts.join(gap) + gap +
+                 ('-' * widths[6]).ljust(widths[6] + gap.length) +
+                 ('-' * widths[7])
+      lines << sep_line
 
       # Instructions
       program.instructions.each_with_index do |instr, addr|
@@ -85,19 +91,21 @@ module SqlitePurerb
                   end
         indent = in_loop ? '  ' : ''
 
-        fields = [
+        main_fields = [
           addr.to_s.ljust(widths[0]),
           name.ljust(widths[1]),
           instr.p1.to_s.ljust(widths[2]),
           instr.p2.to_s.ljust(widths[3]),
           instr.p3.to_s.ljust(widths[4]),
-          p4_str.ljust(widths[5]),
-          p5_val.to_s.ljust(widths[6]),
-          comment
+          p4_str.ljust(widths[5])
         ]
 
-        # Insert indent between addr and opcode
-        line = fields[0] + gap + indent + fields[1..].join(gap)
+        # p5 absorbs the following gap so overflow eats gap instead of adding extra space
+        p5_str = p5_val.to_s.ljust(widths[6] + gap.length)
+
+        line = main_fields[0] + gap + indent +
+               main_fields[1..].join(gap) + gap +
+               p5_str + comment
         lines << line
       end
 

@@ -5,7 +5,13 @@ module SqlitePurerb
     module Read
       module OpLt
         def self.execute(instr, ctx)
-          ctx.pc = instr.p2 if ctx.registers[instr.p3] < ctx.registers[instr.p1]
+          a = ctx.registers[instr.p3]
+          b = ctx.registers[instr.p1]
+          if a.nil? || b.nil?
+            ctx.pc = instr.p2 if (instr.p5 & 0x10) != 0
+          elsif a < b
+            ctx.pc = instr.p2
+          end
         end
       end
     end

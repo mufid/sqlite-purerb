@@ -49,6 +49,8 @@ module SqlitePurerb
       AND            = 52  # reg[P3] = reg[P1] AND reg[P2]
       OR             = 53  # reg[P3] = reg[P1] OR reg[P2]
       NOT            = 54  # reg[P2] = NOT reg[P1]
+      IS_NULL        = 55  # Jump to P2 if reg[P1] is NULL
+      NOT_NULL       = 56  # Jump to P2 if reg[P1] is not NULL
 
       # Sorter operations (ORDER BY)
       SORTER_OPEN    = 60  # Open sorter cursor P1, P4=key info
@@ -110,6 +112,8 @@ module SqlitePurerb
         AND => 'And',
         OR => 'Or',
         NOT => 'Not',
+        IS_NULL => 'IsNull',
+        NOT_NULL => 'NotNull',
         SORTER_OPEN => 'SorterOpen',
         MAKE_RECORD => 'MakeRecord',
         SORTER_INSERT => 'SorterInsert',
