@@ -1,0 +1,228 @@
+id|name|price|category|stock
+1|Apple|1.5|fruit|100
+2|Banana|0.75|fruit|200
+3|Carrot|2.0|vegetable|150
+4|Date|5.99|fruit|50
+5|Eggplant|3.25|vegetable|75
+6|Fig|4.5|fruit|30
+7|Garlic|1.99|vegetable|300
+8|Honeydew|6.0|fruit|20
+id|name|price|category|stock
+2|Banana|0.75|fruit|200
+1|Apple|1.5|fruit|100
+7|Garlic|1.99|vegetable|300
+3|Carrot|2.0|vegetable|150
+5|Eggplant|3.25|vegetable|75
+6|Fig|4.5|fruit|30
+4|Date|5.99|fruit|50
+8|Honeydew|6.0|fruit|20
+id|name|price|category|stock
+8|Honeydew|6.0|fruit|20
+7|Garlic|1.99|vegetable|300
+6|Fig|4.5|fruit|30
+5|Eggplant|3.25|vegetable|75
+4|Date|5.99|fruit|50
+3|Carrot|2.0|vegetable|150
+2|Banana|0.75|fruit|200
+1|Apple|1.5|fruit|100
+id|name|price|category|stock
+8|Honeydew|6.0|fruit|20
+4|Date|5.99|fruit|50
+6|Fig|4.5|fruit|30
+5|Eggplant|3.25|vegetable|75
+3|Carrot|2.0|vegetable|150
+7|Garlic|1.99|vegetable|300
+1|Apple|1.5|fruit|100
+2|Banana|0.75|fruit|200
+id|name|price|category|stock
+1|Apple|1.5|fruit|100
+2|Banana|0.75|fruit|200
+3|Carrot|2.0|vegetable|150
+id|name|price|category|stock
+3|Carrot|2.0|vegetable|150
+4|Date|5.99|fruit|50
+5|Eggplant|3.25|vegetable|75
+name|price
+Banana|0.75
+Apple|1.5
+Garlic|1.99
+name|price
+Honeydew|6.0
+Date|5.99
+id|name|price|category|stock
+2|Banana|0.75|fruit|200
+1|Apple|1.5|fruit|100
+6|Fig|4.5|fruit|30
+4|Date|5.99|fruit|50
+8|Honeydew|6.0|fruit|20
+id|name|price|category|stock
+8|Honeydew|6.0|fruit|20
+4|Date|5.99|fruit|50
+id|name|price|category|stock
+1|Apple|1.5|fruit|100
+2|Banana|0.75|fruit|200
+4|Date|5.99|fruit|50
+6|Fig|4.5|fruit|30
+8|Honeydew|6.0|fruit|20
+3|Carrot|2.0|vegetable|150
+5|Eggplant|3.25|vegetable|75
+7|Garlic|1.99|vegetable|300
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     24    0                    0   Start at 24
+1     SorterOpen     1     7     0     k(1,B)         0   
+2     OpenRead       0     2     0     5              0   root=2 iDb=0; products
+3     Rewind         0     13    0                    0   
+4       Rowid          0     2     0                    0   r[2]=products.rowid
+5       Column         0     2     3                    0   r[3]= cursor 0 column 2
+6       RealAffinity   3     0     0                    0   
+7       Column         0     3     4                    0   r[4]= cursor 0 column 3
+8       Column         0     4     5                    0   r[5]= cursor 0 column 4
+9       Column         0     1     1                    0   r[1]= cursor 0 column 1
+10      MakeRecord     1     5     7                    0   r[7]=mkrec(r[1..5])
+11      SorterInsert   1     7     1     5              0   key=r[7]
+12    Next           0     4     0                    1   
+13    OpenPseudo     2     8     7                    0   7 columns in r[8]
+14    SorterSort     1     23    0                    0   
+15      SorterData     1     8     2                    0   r[8]=data
+16      Column         2     4     6                    0   r[6]=stock
+17      Column         2     3     5                    0   r[5]=category
+18      Column         2     2     4                    0   r[4]=price
+19      Column         2     0     3                    0   r[3]=name
+20      Column         2     1     2                    0   r[2]=id
+21      ResultRow      2     5     0                    0   output=r[2..6]
+22    SorterNext     1     15    0                    0   
+23    Halt           0     0     0                    0   
+24    Transaction    0     0     1     0              1   usesStmtJournal=0
+25    Goto           0     1     0                    0   
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     14    0                    0   Start at 14
+1     Integer        3     1     0                    0   r[1]=3; LIMIT counter
+2     OpenRead       0     2     0     5              0   root=2 iDb=0; products
+3     Rewind         0     13    0                    0   
+4       Rowid          0     2     0                    0   r[2]=products.rowid
+5       Column         0     1     3                    0   r[3]= cursor 0 column 1
+6       Column         0     2     4                    0   r[4]= cursor 0 column 2
+7       RealAffinity   4     0     0                    0   
+8       Column         0     3     5                    0   r[5]= cursor 0 column 3
+9       Column         0     4     6                    0   r[6]= cursor 0 column 4
+10      ResultRow      2     5     0                    0   output=r[2..6]
+11      DecrJumpZero   1     13    0                    0   if (--r[1])==0 goto 13
+12    Next           0     4     0                    1   
+13    Halt           0     0     0                    0   
+14    Transaction    0     0     1     0              1   usesStmtJournal=0
+15    Goto           0     1     0                    0   
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     18    0                    0   Start at 18
+1     Integer        3     1     0                    0   r[1]=3; LIMIT counter
+2     Integer        2     2     0                    0   r[2]=2
+3     MustBeInt      2     0     0                    0   OFFSET counter
+4     OffsetLimit    1     3     2                    0   if r[1]>0 then r[3]=r[1]+max(0,r[2]) else r[3]=(-1); LIMIT+OFFSET
+5     OpenRead       0     2     0     5              0   root=2 iDb=0; products
+6     Rewind         0     17    0                    0   
+7       IfPos          2     16    1                    0   if r[2]>0 then r[2]-=1, goto 16; OFFSET
+8       Rowid          0     4     0                    0   r[4]=products.rowid
+9       Column         0     1     5                    0   r[5]= cursor 0 column 1
+10      Column         0     2     6                    0   r[6]= cursor 0 column 2
+11      RealAffinity   6     0     0                    0   
+12      Column         0     3     7                    0   r[7]= cursor 0 column 3
+13      Column         0     4     8                    0   r[8]= cursor 0 column 4
+14      ResultRow      4     5     0                    0   output=r[4..8]
+15      DecrJumpZero   1     17    0                    0   if (--r[1])==0 goto 17
+16    Next           0     7     0                    1   
+17    Halt           0     0     0                    0   
+18    Transaction    0     0     1     0              1   usesStmtJournal=0
+19    Goto           0     1     0                    0   
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     28    0                    0   Start at 28
+1     OpenEphemeral  1     7     0     k(1,B)         0   nColumn=7
+2     Integer        3     1     0                    0   r[1]=3; LIMIT counter
+3     OpenRead       0     2     0     5              0   root=2 iDb=0; products
+4     Rewind         0     19    0                    0   
+5       Column         0     2     2                    0   r[2]= cursor 0 column 2
+6       RealAffinity   2     0     0                    0   
+7       Sequence       1     3     0                    0   r[3]=cursor[1].ctr++
+8       IfNotZero      1     12    0                    0   if r[1]!=0 then r[1]--, goto 12
+9       Last           1     0     0                    0   
+10      IdxLE          1     18    2     1              0   key=r[2]
+11      Delete         1     0     0                    0   
+12      Rowid          0     4     0                    0   r[4]=products.rowid
+13      Column         0     1     5                    0   r[5]= cursor 0 column 1
+14      Column         0     3     6                    0   r[6]= cursor 0 column 3
+15      Column         0     4     7                    0   r[7]= cursor 0 column 4
+16      MakeRecord     2     6     9                    0   r[9]=mkrec(r[2..7])
+17      IdxInsert      1     9     2     6              0   key=r[9]
+18    Next           0     5     0                    1   
+19    Sort           1     27    0                    0   
+20      Column         1     5     8                    0   r[8]=stock
+21      Column         1     4     7                    0   r[7]=category
+22      Column         1     0     6                    0   r[6]=price
+23      Column         1     3     5                    0   r[5]=name
+24      Column         1     2     4                    0   r[4]=id
+25      ResultRow      4     5     0                    0   output=r[4..8]
+26    Next           1     20    0                    0   
+27    Halt           0     0     0                    0   
+28    Transaction    0     0     1     0              1   usesStmtJournal=0
+29    Goto           0     1     0                    0   
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     26    0                    0   Start at 26
+1     SorterOpen     1     7     0     k(1,B)         0   
+2     OpenRead       0     2     0     5              0   root=2 iDb=0; products
+3     Rewind         0     15    0                    0   
+4       Column         0     3     1                    0   r[1]= cursor 0 column 3
+5       Ne             2     14    1     BINARY-8       82  if r[1]!=r[2] goto 14
+6       Rowid          0     4     0                    0   r[4]=products.rowid
+7       Column         0     1     5                    0   r[5]= cursor 0 column 1
+8       Column         0     3     6                    0   r[6]= cursor 0 column 3
+9       Column         0     4     7                    0   r[7]= cursor 0 column 4
+10      Column         0     2     3                    0   r[3]= cursor 0 column 2
+11      RealAffinity   3     0     0                    0   
+12      MakeRecord     3     5     9                    0   r[9]=mkrec(r[3..7])
+13      SorterInsert   1     9     3     5              0   key=r[9]
+14    Next           0     4     0                    1   
+15    OpenPseudo     2     10    7                    0   7 columns in r[10]
+16    SorterSort     1     25    0                    0   
+17      SorterData     1     10    2                    0   r[10]=data
+18      Column         2     4     8                    0   r[8]=stock
+19      Column         2     3     7                    0   r[7]=category
+20      Column         2     0     6                    0   r[6]=price
+21      Column         2     2     5                    0   r[5]=name
+22      Column         2     1     4                    0   r[4]=id
+23      ResultRow      4     5     0                    0   output=r[4..8]
+24    SorterNext     1     17    0                    0   
+25    Halt           0     0     0                    0   
+26    Transaction    0     0     1     0              1   usesStmtJournal=0
+27    String8        0     2     0     fruit          0   r[2]='fruit'
+28    Goto           0     1     0                    0   
+addr  opcode         p1    p2    p3    p4             p5  comment      
+----  -------------  ----  ----  ----  -------------  --  -------------
+0     Init           0     24    0                    0   Start at 24
+1     SorterOpen     1     8     0     k(2,B,B)       0   
+2     OpenRead       0     2     0     5              0   root=2 iDb=0; products
+3     Rewind         0     13    0                    0   
+4       Rowid          0     3     0                    0   r[3]=products.rowid
+5       Column         0     2     4                    0   r[4]= cursor 0 column 2
+6       RealAffinity   4     0     0                    0   
+7       Column         0     4     5                    0   r[5]= cursor 0 column 4
+8       Column         0     3     1                    0   r[1]= cursor 0 column 3
+9       Column         0     1     2                    0   r[2]= cursor 0 column 1
+10      MakeRecord     1     5     8                    0   r[8]=mkrec(r[1..5])
+11      SorterInsert   1     8     1     5              0   key=r[8]
+12    Next           0     4     0                    1   
+13    OpenPseudo     2     9     8                    0   8 columns in r[9]
+14    SorterSort     1     23    0                    0   
+15      SorterData     1     9     2                    0   r[9]=data
+16      Column         2     4     7                    0   r[7]=stock
+17      Column         2     0     6                    0   r[6]=category
+18      Column         2     3     5                    0   r[5]=price
+19      Column         2     1     4                    0   r[4]=name
+20      Column         2     2     3                    0   r[3]=id
+21      ResultRow      3     5     0                    0   output=r[3..7]
+22    SorterNext     1     15    0                    0   
+23    Halt           0     0     0                    0   
+24    Transaction    0     0     1     0              1   usesStmtJournal=0
+25    Goto           0     1     0                    0   

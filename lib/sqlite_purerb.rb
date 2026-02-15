@@ -14,6 +14,7 @@ require_relative 'sqlite_purerb/vdbe'
 require_relative 'sqlite_purerb/vdbes/execution_context'
 Dir[File.join(__dir__, 'sqlite_purerb', 'vdbes', '{read,write}', '*.rb')].each { |f| require f }
 require_relative 'sqlite_purerb/vdbes/dispatch'
+Dir[File.join(__dir__, 'sqlite_purerb', 'code_generators', '*.rb')].each { |f| require f }
 require_relative 'sqlite_purerb/code_generator'
 require_relative 'sqlite_purerb/executor'
 require_relative 'sqlite_purerb/database'

@@ -50,6 +50,31 @@ module SqlitePurerb
       OR             = 53  # reg[P3] = reg[P1] OR reg[P2]
       NOT            = 54  # reg[P2] = NOT reg[P1]
 
+      # Sorter operations (ORDER BY)
+      SORTER_OPEN    = 60  # Open sorter cursor P1, P4=key info
+      MAKE_RECORD    = 61  # Pack reg[P1..P1+P2-1] into record in reg[P3]
+      SORTER_INSERT  = 62  # Insert record reg[P2] into sorter P1
+      OPEN_PSEUDO    = 63  # Open pseudo-cursor P1 reading from reg[P2]
+      SORTER_SORT    = 64  # Sort the sorter P1, jump to P2 if empty
+      SORTER_DATA    = 65  # Copy current sorter P1 data into reg[P2]
+      SORTER_NEXT    = 66  # Advance sorter P1, jump to P2 if more rows
+
+      # Limit/Offset operations
+      DECR_JUMP_ZERO = 70  # Decrement reg[P1], jump to P2 if zero
+      MUST_BE_INT    = 71  # Force reg[P1] to integer
+      OFFSET_LIMIT   = 72  # Compute limit+offset: reg[P3] = reg[P1] + max(0, reg[P2])
+      IF_POS         = 73  # If reg[P1]>0 then reg[P1]-=P3, jump to P2
+
+      # Ephemeral table operations (ORDER BY + LIMIT)
+      OPEN_EPHEMERAL = 80  # Open ephemeral table cursor P1, P4=key info
+      SEQUENCE       = 81  # reg[P2] = cursor[P1].seqno++
+      IF_NOT_ZERO    = 82  # If reg[P1]!=0 then reg[P1]--, jump to P2
+      LAST           = 83  # Move cursor P1 to last entry
+      IDX_LE         = 84  # Jump to P2 if key <= reg[P3..P3+P4-1]
+      DELETE         = 85  # Delete current row from cursor P1
+      SORT           = 86  # Rewind cursor P1 for reading sorted, jump P2 if empty
+      IDX_INSERT     = 87  # Insert record reg[P2] into index P1
+
       # Names for debugging
       NAMES = {
         INIT => 'Init',
@@ -78,7 +103,26 @@ module SqlitePurerb
         IF_NOT => 'IfNot',
         AND => 'And',
         OR => 'Or',
-        NOT => 'Not'
+        NOT => 'Not',
+        SORTER_OPEN => 'SorterOpen',
+        MAKE_RECORD => 'MakeRecord',
+        SORTER_INSERT => 'SorterInsert',
+        OPEN_PSEUDO => 'OpenPseudo',
+        SORTER_SORT => 'SorterSort',
+        SORTER_DATA => 'SorterData',
+        SORTER_NEXT => 'SorterNext',
+        DECR_JUMP_ZERO => 'DecrJumpZero',
+        MUST_BE_INT => 'MustBeInt',
+        OFFSET_LIMIT => 'OffsetLimit',
+        IF_POS => 'IfPos',
+        OPEN_EPHEMERAL => 'OpenEphemeral',
+        SEQUENCE => 'Sequence',
+        IF_NOT_ZERO => 'IfNotZero',
+        LAST => 'Last',
+        IDX_LE => 'IdxLE',
+        DELETE => 'Delete',
+        SORT => 'Sort',
+        IDX_INSERT => 'IdxInsert'
       }.freeze
     end
 
@@ -190,6 +234,200 @@ module SqlitePurerb
           end
           @rows << { rowid: rowid, values: values }
         end
+      end
+    end
+
+    # Sorter for ORDER BY - collects records, sorts them, iterates
+    class Sorter
+      attr_accessor :seqno
+
+      def initialize(key_info)
+        @key_info = key_info  # e.g. "k(1,B)" or "k(2,B,B)"
+        @records = []
+        @position = -1
+        @seqno = 0
+        parse_key_info(key_info)
+      end
+
+      def insert(record)
+        @records << record
+      end
+
+      def sort!
+        @records.sort! { |a, b| compare_records(a, b) }
+        @position = 0
+      end
+
+      def empty?
+        @records.empty?
+      end
+
+      def current_data
+        return nil if @position < 0 || @position >= @records.length
+        @records[@position]
+      end
+
+      def next_row
+        @position += 1
+        @position < @records.length
+      end
+
+      def rewind
+        @position = 0
+        !@records.empty?
+      end
+
+      private
+
+      def parse_key_info(info)
+        return unless info
+        # Parse "k(N,B)" or "k(N,B,B)" format
+        # N = number of sort keys, B = sort direction (B=ascending for btree)
+        if info =~ /k\((\d+)((?:,-?[A-Z])*)\)/
+          @num_keys = $1.to_i
+          dirs = $2.split(',').reject(&:empty?)
+          @directions = dirs.map { |d| d.start_with?('-') ? :desc : :asc }
+        else
+          @num_keys = 1
+          @directions = [:asc]
+        end
+      end
+
+      def compare_records(a, b)
+        @num_keys.times do |i|
+          va = a[i]
+          vb = b[i]
+          cmp = compare_values(va, vb)
+          dir = @directions[i] || :asc
+          cmp = -cmp if dir == :desc
+          return cmp unless cmp == 0
+        end
+        0
+      end
+
+      def compare_values(a, b)
+        return 0 if a.nil? && b.nil?
+        return -1 if a.nil?
+        return 1 if b.nil?
+        a <=> b
+      end
+    end
+
+    # PseudoCursor reads columns from a record stored in a register
+    class PseudoCursor
+      attr_reader :register, :num_columns
+
+      def initialize(register, num_columns)
+        @register = register
+        @num_columns = num_columns
+      end
+
+      def column(index)
+        @data[index] if @data
+      end
+
+      def set_data(data)
+        @data = data
+      end
+    end
+
+    # EphemeralTable is a sorted bounded collection for ORDER BY + LIMIT (top-N)
+    class EphemeralTable
+      attr_accessor :seqno
+
+      def initialize(key_info)
+        @key_info = key_info
+        @records = []
+        @position = -1
+        @seqno = 0
+        parse_key_info(key_info)
+      end
+
+      def insert(record)
+        @records << record
+      end
+
+      def size
+        @records.length
+      end
+
+      def last_entry
+        @records.sort! { |a, b| compare_records(a, b) }
+        @position = @records.length - 1
+      end
+
+      def current_key_le?(key_values, num_keys)
+        return false if @position < 0 || @position >= @records.length
+        current = @records[@position]
+        num_keys.times do |i|
+          cmp = compare_values(current[i], key_values[i])
+          dir = @directions[i] || :asc
+          cmp = -cmp if dir == :desc
+          return true if cmp < 0
+          return false if cmp > 0
+        end
+        true  # equal counts as LE
+      end
+
+      def delete_current
+        @records.delete_at(@position) if @position >= 0 && @position < @records.length
+      end
+
+      def sort!
+        @records.sort! { |a, b| compare_records(a, b) }
+        @position = 0
+      end
+
+      def rewind
+        @position = 0
+        !@records.empty?
+      end
+
+      def empty?
+        @records.empty?
+      end
+
+      def next_row
+        @position += 1
+        @position < @records.length
+      end
+
+      def column(index)
+        return nil if @position < 0 || @position >= @records.length
+        @records[@position][index]
+      end
+
+      private
+
+      def parse_key_info(info)
+        return unless info
+        if info =~ /k\((\d+)((?:,-?[A-Z])*)\)/
+          @num_keys = $1.to_i
+          dirs = $2.split(',').reject(&:empty?)
+          @directions = dirs.map { |d| d.start_with?('-') ? :desc : :asc }
+        else
+          @num_keys = 1
+          @directions = [:asc]
+        end
+      end
+
+      def compare_records(a, b)
+        @num_keys.times do |i|
+          va = a[i]
+          vb = b[i]
+          cmp = compare_values(va, vb)
+          dir = @directions[i] || :asc
+          cmp = -cmp if dir == :desc
+          return cmp unless cmp == 0
+        end
+        0
+      end
+
+      def compare_values(a, b)
+        return 0 if a.nil? && b.nil?
+        return -1 if a.nil?
+        return 1 if b.nil?
+        a <=> b
       end
     end
 

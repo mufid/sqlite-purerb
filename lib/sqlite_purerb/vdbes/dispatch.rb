@@ -45,6 +45,31 @@ module SqlitePurerb
     DISPATCH[VDBE::OP::OR]             = Read::OpOr
     DISPATCH[VDBE::OP::NOT]            = Read::OpNot
 
+    # Sorter operations (ORDER BY)
+    DISPATCH[VDBE::OP::SORTER_OPEN]    = Read::OpSorterOpen
+    DISPATCH[VDBE::OP::MAKE_RECORD]    = Read::OpMakeRecord
+    DISPATCH[VDBE::OP::SORTER_INSERT]  = Read::OpSorterInsert
+    DISPATCH[VDBE::OP::OPEN_PSEUDO]    = Read::OpOpenPseudo
+    DISPATCH[VDBE::OP::SORTER_SORT]    = Read::OpSorterSort
+    DISPATCH[VDBE::OP::SORTER_DATA]    = Read::OpSorterData
+    DISPATCH[VDBE::OP::SORTER_NEXT]    = Read::OpSorterNext
+
+    # Limit/Offset operations
+    DISPATCH[VDBE::OP::DECR_JUMP_ZERO] = Read::OpDecrJumpZero
+    DISPATCH[VDBE::OP::MUST_BE_INT]    = Read::OpMustBeInt
+    DISPATCH[VDBE::OP::OFFSET_LIMIT]   = Read::OpOffsetLimit
+    DISPATCH[VDBE::OP::IF_POS]         = Read::OpIfPos
+
+    # Ephemeral table operations (ORDER BY + LIMIT)
+    DISPATCH[VDBE::OP::OPEN_EPHEMERAL] = Read::OpOpenEphemeral
+    DISPATCH[VDBE::OP::SEQUENCE]       = Read::OpSequence
+    DISPATCH[VDBE::OP::IF_NOT_ZERO]    = Read::OpIfNotZero
+    DISPATCH[VDBE::OP::LAST]           = Read::OpLast
+    DISPATCH[VDBE::OP::IDX_LE]         = Read::OpIdxLE
+    DISPATCH[VDBE::OP::DELETE]         = Read::OpDelete
+    DISPATCH[VDBE::OP::SORT]           = Read::OpSort
+    DISPATCH[VDBE::OP::IDX_INSERT]     = Read::OpIdxInsert
+
     DISPATCH.freeze
   end
 end

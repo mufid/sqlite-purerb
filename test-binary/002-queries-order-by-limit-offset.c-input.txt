@@ -1,0 +1,19 @@
+.headers on
+.mode list
+SELECT * FROM products ORDER BY name;
+SELECT * FROM products ORDER BY price;
+SELECT * FROM products ORDER BY name DESC;
+SELECT * FROM products ORDER BY price DESC;
+SELECT * FROM products LIMIT 3;
+SELECT * FROM products LIMIT 3 OFFSET 2;
+SELECT name, price FROM products ORDER BY price LIMIT 3;
+SELECT name, price FROM products ORDER BY price DESC LIMIT 2;
+SELECT * FROM products WHERE category = 'fruit' ORDER BY price;
+SELECT * FROM products WHERE category = 'fruit' ORDER BY price DESC LIMIT 2;
+SELECT * FROM products ORDER BY category, name;
+EXPLAIN SELECT * FROM products ORDER BY name;
+EXPLAIN SELECT * FROM products LIMIT 3;
+EXPLAIN SELECT * FROM products LIMIT 3 OFFSET 2;
+EXPLAIN SELECT * FROM products ORDER BY price LIMIT 3;
+EXPLAIN SELECT * FROM products WHERE category = 'fruit' ORDER BY price;
+EXPLAIN SELECT * FROM products ORDER BY category, name;

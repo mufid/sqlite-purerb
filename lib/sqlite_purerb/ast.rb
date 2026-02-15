@@ -8,12 +8,25 @@ module SqlitePurerb
 
     # Represents a SELECT statement
     class SelectStmt < Node
-      attr_accessor :columns, :from_table, :where_clause
+      attr_accessor :columns, :from_table, :where_clause, :order_by, :limit, :offset
 
-      def initialize(columns: nil, from_table: nil, where_clause: nil)
+      def initialize(columns: nil, from_table: nil, where_clause: nil, order_by: nil, limit: nil, offset: nil)
         @columns = columns      # Array of Column or Star
         @from_table = from_table # String (table name)
         @where_clause = where_clause # Expr or nil
+        @order_by = order_by    # Array of OrderByTerm or nil
+        @limit = limit          # Integer or nil
+        @offset = offset        # Integer or nil
+      end
+    end
+
+    # Represents an ORDER BY term
+    class OrderByTerm < Node
+      attr_accessor :column_name, :direction
+
+      def initialize(column_name, direction = :asc)
+        @column_name = column_name
+        @direction = direction  # :asc or :desc
       end
     end
 

@@ -100,7 +100,7 @@ module SqlitePurerb
       tokens
     end
 
-    KEYWORDS = %w[SELECT FROM WHERE AND OR AS].freeze
+    KEYWORDS = %w[SELECT FROM WHERE AND OR AS ORDER BY ASC DESC LIMIT OFFSET].freeze
 
     def keyword?(word)
       KEYWORDS.include?(word.upcase)
@@ -148,10 +148,28 @@ module SqlitePurerb
         where_clause = parse_expr
       end
 
+      order_by = nil
+      if accept(:ORDER)
+        expect(:BY)
+        order_by = parse_order_by_list
+      end
+
+      limit = nil
+      offset = nil
+      if accept(:LIMIT)
+        limit = expect(:NUMBER)[1].to_i
+        if accept(:OFFSET)
+          offset = expect(:NUMBER)[1].to_i
+        end
+      end
+
       AST::SelectStmt.new(
         columns: columns,
         from_table: table_name,
-        where_clause: where_clause
+        where_clause: where_clause,
+        order_by: order_by,
+        limit: limit,
+        offset: offset
       )
     end
 
@@ -185,6 +203,22 @@ module SqlitePurerb
       end
 
       AST::Column.new(name, alias_name)
+    end
+
+    def parse_order_by_list
+      terms = []
+      loop do
+        col_name = expect(:ID)[1]
+        direction = :asc
+        if accept(:DESC)
+          direction = :desc
+        else
+          accept(:ASC)
+        end
+        terms << AST::OrderByTerm.new(col_name, direction)
+        break unless accept(:COMMA)
+      end
+      terms
     end
 
     def parse_expr

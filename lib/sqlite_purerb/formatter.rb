@@ -76,7 +76,14 @@ module SqlitePurerb
 
         # C sqlite3 indents loop body by shifting the line right by 2 spaces
         # (inserted between addr gap and opcode field)
-        indent = indent_range&.include?(addr) ? '  ' : ''
+        in_loop = if indent_range.is_a?(Array)
+                    indent_range.any? { |r| r.include?(addr) }
+                  elsif indent_range
+                    indent_range.include?(addr)
+                  else
+                    false
+                  end
+        indent = in_loop ? '  ' : ''
 
         fields = [
           addr.to_s.ljust(widths[0]),
@@ -97,19 +104,49 @@ module SqlitePurerb
       lines.join("\n")
     end
 
-    # Find the range of addresses that are loop body (between Rewind and Next)
+    # Find all loop body ranges for indentation
+    # Handles Rewind/Next, SorterSort/SorterNext, and Sort/Next loops
     def find_loop_body_range(program)
-      rewind_addr = nil
-      next_addr = nil
+      ranges = []
 
+      # Find Rewind -> first Next pair
+      rewind_addr = nil
       program.instructions.each_with_index do |instr, addr|
-        rewind_addr = addr if instr.opcode == VDBE::OP::REWIND
-        next_addr = addr if instr.opcode == VDBE::OP::NEXT
+        if instr.opcode == VDBE::OP::REWIND
+          rewind_addr = addr
+        elsif instr.opcode == VDBE::OP::NEXT && rewind_addr
+          ranges << (rewind_addr + 1...addr)
+          rewind_addr = nil
+          break  # Only first Rewind/Next pair for the main scan loop
+        end
       end
 
-      return nil unless rewind_addr && next_addr
+      # Find SorterSort -> SorterNext pair
+      sorter_sort_addr = nil
+      program.instructions.each_with_index do |instr, addr|
+        if instr.opcode == VDBE::OP::SORTER_SORT
+          sorter_sort_addr = addr
+        elsif instr.opcode == VDBE::OP::SORTER_NEXT && sorter_sort_addr
+          ranges << (sorter_sort_addr + 1...addr)
+          sorter_sort_addr = nil
+        end
+      end
 
-      (rewind_addr + 1...next_addr)
+      # Find Sort -> Next pair (for ephemeral table output)
+      sort_addr = nil
+      program.instructions.each_with_index do |instr, addr|
+        if instr.opcode == VDBE::OP::SORT
+          sort_addr = addr
+        elsif instr.opcode == VDBE::OP::NEXT && sort_addr
+          ranges << (sort_addr + 1...addr)
+          sort_addr = nil
+        end
+      end
+
+      return nil if ranges.empty?
+
+      # Combine all ranges
+      ranges
     end
 
     # --- Value formatting ---
