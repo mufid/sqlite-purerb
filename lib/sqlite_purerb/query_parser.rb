@@ -191,6 +191,11 @@ module SqlitePurerb
     end
 
     def parse_column
+      # Check for function call: ID followed by LPAREN
+      if peek(:ID) && @tokens[@current + 1]&.first == :LPAREN
+        return parse_function_call_column
+      end
+
       name = expect(:ID)[1]
       alias_name = nil
 
@@ -203,6 +208,33 @@ module SqlitePurerb
       end
 
       AST::Column.new(name, alias_name)
+    end
+
+    def parse_function_call_column
+      name = expect(:ID)[1]
+      expect(:LPAREN)
+      args = []
+      unless peek(:RPAREN)
+        loop do
+          if peek(:STAR)
+            accept(:STAR)
+            args << AST::Star.new
+          else
+            args << parse_expr
+          end
+          break unless accept(:COMMA)
+        end
+      end
+      expect(:RPAREN)
+
+      alias_name = nil
+      if accept(:AS)
+        alias_name = expect(:ID)[1]
+      elsif peek(:ID)
+        alias_name = accept(:ID)[1]
+      end
+
+      AST::FunctionCall.new(name, args, alias_name)
     end
 
     def parse_order_by_list
@@ -310,12 +342,33 @@ module SqlitePurerb
 
     def parse_primary
       if (token = accept(:ID))
-        AST::ColumnRef.new(token[1])
+        # Check for function call: ID followed by LPAREN
+        if peek(:LPAREN)
+          accept(:LPAREN)
+          args = []
+          unless peek(:RPAREN)
+            loop do
+              if peek(:STAR)
+                accept(:STAR)
+                args << AST::Star.new
+              else
+                args << parse_expr
+              end
+              break unless accept(:COMMA)
+            end
+          end
+          expect(:RPAREN)
+          AST::FunctionCall.new(token[1], args)
+        else
+          AST::ColumnRef.new(token[1])
+        end
       elsif (token = accept(:STRING))
         AST::Literal.new(token[1])
       elsif (token = accept(:NUMBER))
         value = token[1].include?('.') ? token[1].to_f : token[1].to_i
         AST::Literal.new(value)
+      elsif accept(:NULL)
+        AST::Literal.new(nil)
       elsif accept(:LPAREN)
         expr = parse_expr
         expect(:RPAREN)

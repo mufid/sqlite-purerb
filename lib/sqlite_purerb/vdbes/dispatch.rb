@@ -79,6 +79,9 @@ module SqlitePurerb
     DISPATCH[VDBE::OP::DEFERRED_SEEK]  = Read::OpDeferredSeek
     DISPATCH[VDBE::OP::IDX_ROWID]      = Read::OpIdxRowid
 
+    # Function operations
+    DISPATCH[VDBE::OP::FUNCTION]       = Read::OpFunction
+
     DISPATCH.freeze
   end
 end

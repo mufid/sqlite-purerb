@@ -61,12 +61,17 @@ module SqlitePurerb
         output_columns.reverse.each_with_index do |col, rev_i|
           output_idx = output_columns.length - 1 - rev_i
           reg = result_base + output_idx
-          col_index = col[:column_index]
-          record_pos = col_to_record_pos[col_index]
 
-          col_name = col[:output_name].downcase
-          @program.add(OP::COLUMN, p1: pseudo_cursor, p2: record_pos, p3: reg,
-                       comment: "r[#{reg}]=#{col_name}")
+          if col[:expr]
+            emit_function_from_cursor(pseudo_cursor, col, reg, col_to_record_pos, has_rowid_pk)
+          else
+            col_index = col[:column_index]
+            record_pos = col_to_record_pos[col_index]
+
+            col_name = col[:output_name].downcase
+            @program.add(OP::COLUMN, p1: pseudo_cursor, p2: record_pos, p3: reg,
+                         comment: "r[#{reg}]=#{col_name}")
+          end
         end
       end
 
@@ -84,12 +89,17 @@ module SqlitePurerb
         output_columns.reverse.each_with_index do |col, rev_i|
           output_idx = output_columns.length - 1 - rev_i
           reg = result_base + output_idx
-          col_index = col[:column_index]
-          record_pos = col_to_record_pos[col_index]
 
-          col_name = col[:output_name].downcase
-          @program.add(OP::COLUMN, p1: ephemeral_cursor, p2: record_pos, p3: reg,
-                       comment: "r[#{reg}]=#{col_name}")
+          if col[:expr]
+            emit_function_from_cursor(ephemeral_cursor, col, reg, col_to_record_pos, has_rowid_pk)
+          else
+            col_index = col[:column_index]
+            record_pos = col_to_record_pos[col_index]
+
+            col_name = col[:output_name].downcase
+            @program.add(OP::COLUMN, p1: ephemeral_cursor, p2: record_pos, p3: reg,
+                         comment: "r[#{reg}]=#{col_name}")
+          end
         end
       end
 
@@ -97,19 +107,72 @@ module SqlitePurerb
       def emit_read_output_columns(cursor, output_columns, result_base, table_name, table_columns,
                                    column_affinities, has_rowid_pk)
         output_columns.each_with_index do |col, i|
-          col_index = col[:column_index]
-          if col_index == 0 && has_rowid_pk
-            @program.add(OP::ROWID, p1: cursor, p2: result_base + i,
-                         comment: "r[#{result_base + i}]=#{table_name}.rowid")
+          if col[:expr]
+            emit_function_column(cursor, col, result_base + i, table_name, table_columns,
+                                column_affinities, has_rowid_pk)
           else
-            @max_col_index = col_index if col_index > @max_col_index
-            @program.add(OP::COLUMN, p1: cursor, p2: col_index, p3: result_base + i,
-                         comment: "r[#{result_base + i}]= cursor #{cursor} column #{col_index}")
-            if column_affinities[col_index] == :real
-              @program.add(OP::REAL_AFFINITY, p1: result_base + i)
+            col_index = col[:column_index]
+            if col_index == 0 && has_rowid_pk
+              @program.add(OP::ROWID, p1: cursor, p2: result_base + i,
+                           comment: "r[#{result_base + i}]=#{table_name}.rowid")
+            else
+              @max_col_index = col_index if col_index > @max_col_index
+              @program.add(OP::COLUMN, p1: cursor, p2: col_index, p3: result_base + i,
+                           comment: "r[#{result_base + i}]= cursor #{cursor} column #{col_index}")
+              if column_affinities[col_index] == :real
+                @program.add(OP::REAL_AFFINITY, p1: result_base + i)
+              end
             end
           end
         end
+      end
+
+      # Emit function call column (read args then apply function)
+      def emit_function_column(cursor, col_info, dest_reg, table_name, table_columns,
+                               column_affinities, has_rowid_pk)
+        func = col_info[:expr]
+        arg_indices = col_info[:arg_col_indices]
+
+        arg_base = allocate_registers(arg_indices.length)
+        arg_indices.each_with_index do |col_idx, i|
+          if col_idx == :star || col_idx == :literal
+            # No column read needed
+          elsif col_idx == 0 && has_rowid_pk
+            @program.add(OP::ROWID, p1: cursor, p2: arg_base + i,
+                         comment: "r[#{arg_base + i}]=#{table_name}.rowid")
+          else
+            @max_col_index = col_idx if col_idx.is_a?(Integer) && col_idx > @max_col_index
+            @program.add(OP::COLUMN, p1: cursor, p2: col_idx, p3: arg_base + i,
+                         comment: "r[#{arg_base + i}]= cursor #{cursor} column #{col_idx}")
+            # Apply column affinity so typeof() sees the correct storage class
+            if col_idx.is_a?(Integer) && column_affinities[col_idx] == :real
+              @program.add(OP::REAL_AFFINITY, p1: arg_base + i)
+            end
+          end
+        end
+
+        @program.add(OP::FUNCTION, p1: arg_base, p2: 0, p3: dest_reg,
+                     p4: func.name.downcase, p5: arg_indices.length,
+                     comment: "r[#{dest_reg}]=#{func.name.downcase}(r[#{arg_base}])")
+      end
+
+      # Emit function call from a pseudo/ephemeral cursor (sorter/topn output phase)
+      def emit_function_from_cursor(cursor, col_info, dest_reg, col_to_record_pos, has_rowid_pk)
+        func = col_info[:expr]
+        arg_indices = col_info[:arg_col_indices]
+
+        arg_base = allocate_registers(arg_indices.length)
+        arg_indices.each_with_index do |col_idx, i|
+          if col_idx.is_a?(Integer)
+            record_pos = col_to_record_pos[col_idx]
+            @program.add(OP::COLUMN, p1: cursor, p2: record_pos, p3: arg_base + i,
+                         comment: "r[#{arg_base + i}]= cursor #{cursor} column #{record_pos}")
+          end
+        end
+
+        @program.add(OP::FUNCTION, p1: arg_base, p2: 0, p3: dest_reg,
+                     p4: func.name.downcase, p5: arg_indices.length,
+                     comment: "r[#{dest_reg}]=#{func.name.downcase}(r[#{arg_base}])")
       end
 
       # Emit the epilogue: Halt, Transaction, deferred constants, Goto

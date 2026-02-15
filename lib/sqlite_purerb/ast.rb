@@ -144,5 +144,31 @@ module SqlitePurerb
         @values = values
       end
     end
+
+    # Represents a function call (e.g., typeof(xi), count(*))
+    class FunctionCall < Node
+      attr_accessor :name, :args, :alias_name
+
+      def initialize(name, args, alias_name = nil)
+        @name = name
+        @args = args
+        @alias_name = alias_name
+      end
+
+      def result_name
+        @alias_name || "#{@name}(#{@args.map { |a| format_arg(a) }.join(',')})"
+      end
+
+      private
+
+      def format_arg(arg)
+        case arg
+        when Star then '*'
+        when ColumnRef then arg.name
+        when Literal then arg.value.nil? ? 'NULL' : arg.value.to_s
+        else arg.to_s
+        end
+      end
+    end
   end
 end

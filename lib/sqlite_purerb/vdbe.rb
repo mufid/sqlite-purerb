@@ -84,6 +84,9 @@ module SqlitePurerb
       DEFERRED_SEEK  = 92  # Extract rowid from index cursor P1, defer seek on table cursor P2
       IDX_ROWID      = 93  # Extract rowid from index cursor P1 into register P2
 
+      # Function operations
+      FUNCTION       = 100 # reg[P3] = func(P4)(reg[P1]..reg[P1+P5-1])
+
       # Names for debugging
       NAMES = {
         INIT => 'Init',
@@ -138,7 +141,8 @@ module SqlitePurerb
         SEEK_GE => 'SeekGE',
         IDX_GT => 'IdxGT',
         DEFERRED_SEEK => 'DeferredSeek',
-        IDX_ROWID => 'IdxRowid'
+        IDX_ROWID => 'IdxRowid',
+        FUNCTION => 'Function'
       }.freeze
     end
 

@@ -29,6 +29,12 @@ module SqlitePurerb
         @max_col_index = 0
 
         has_order_by = stmt.order_by && !stmt.order_by.empty?
+
+        # Optimization: ORDER BY rowid ASC is the natural table order, skip sorter
+        if has_order_by && natural_rowid_order?(stmt.order_by, table_columns)
+          has_order_by = false
+        end
+
         has_limit = !stmt.limit.nil?
         has_offset = !stmt.offset.nil? && stmt.offset > 0
 
@@ -78,6 +84,17 @@ module SqlitePurerb
         end
 
         nil
+      end
+
+      # Check if ORDER BY is just rowid ASC (natural table order)
+      def natural_rowid_order?(order_by, table_columns)
+        return false unless order_by.length == 1
+
+        term = order_by[0]
+        return false unless term.direction == :asc
+
+        name = term.column_name.downcase
+        %w[rowid _rowid_ oid].include?(name) && !table_columns.any? { |c| c.downcase == name }
       end
 
       # Extract column indexes from simple equality WHERE clauses

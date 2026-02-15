@@ -61,6 +61,8 @@ module SqlitePurerb
           table_columns.map { |c| AST::Column.new(c) }
         when AST::Column
           [col]
+        when AST::FunctionCall
+          [col]
         else
           raise "Unknown column type: #{col.class}"
         end
@@ -98,11 +100,32 @@ module SqlitePurerb
     def project_columns(select_columns, full_row)
       row = {}
       select_columns.each do |col|
-        value = full_row[col.name.downcase]
-        result_name = col.result_name
-        row[result_name] = value
+        case col
+        when AST::FunctionCall
+          result_name = col.result_name
+          row[result_name] = evaluate_function(col, full_row)
+        else
+          value = full_row[col.name.downcase]
+          result_name = col.result_name
+          row[result_name] = value
+        end
       end
       row
+    end
+
+    def evaluate_function(func, full_row)
+      case func.name.downcase
+      when 'typeof'
+        arg = func.args[0]
+        value = case arg
+                when AST::ColumnRef then full_row[arg.name.downcase]
+                when AST::Literal then arg.value
+                else nil
+                end
+        Vdbes::Read::OpFunction.sqlite_typeof(value)
+      else
+        raise "Unknown function: #{func.name}"
+      end
     end
 
     def evaluate_where(expr, row, alias_map)
