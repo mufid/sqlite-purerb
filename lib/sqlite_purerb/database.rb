@@ -3,11 +3,12 @@
 module SqlitePurerb
   # Database is the main entry point for reading SQLite databases
   class Database
-    attr_reader :pager, :btree, :schema
+    attr_reader :pager, :btree, :schema, :indexes
 
     def initialize(file_path)
       @pager = Pager.new(file_path)
       @btree = BTree.new(@pager)
+      @indexes = {}
       @schema = read_schema
     end
 
@@ -26,7 +27,7 @@ module SqlitePurerb
       ast = parser.parse
 
       # Step 2: Compile AST into VDBE bytecode
-      code_gen = CodeGenerator.new(@schema)
+      code_gen = CodeGenerator.new(@schema, indexes: @indexes, schema_cookie: @pager.schema_cookie)
       program = code_gen.compile(ast)
 
       # Step 3: Execute bytecode in VDBE virtual machine
@@ -39,7 +40,7 @@ module SqlitePurerb
       parser = QueryParser.new(sql)
       ast = parser.parse
 
-      code_gen = CodeGenerator.new(@schema)
+      code_gen = CodeGenerator.new(@schema, indexes: @indexes, schema_cookie: @pager.schema_cookie)
       code_gen.compile(ast)
     end
 
@@ -65,6 +66,7 @@ module SqlitePurerb
     # Read the schema from sqlite_master (page 1)
     def read_schema
       schema = {}
+      raw_indexes = []
 
       # sqlite_master is always on page 1
       @btree.scan_table(1) do |_rowid, values|
@@ -76,23 +78,66 @@ module SqlitePurerb
         # 4: sql
         type = values[0]
         name = values[1]
+        tbl_name = values[2]
         root_page = values[3]
         sql = values[4]
 
-        next unless type == 'table' && name && !name.start_with?('sqlite_')
+        if type == 'table' && name && !name.start_with?('sqlite_')
+          columns, has_rowid_pk, column_affinities = parse_create_table(sql)
+          schema[name.downcase] = {
+            name: name,
+            root_page: root_page,
+            columns: columns,
+            column_affinities: column_affinities,
+            has_rowid_pk: has_rowid_pk,
+            sql: sql
+          }
+        elsif type == 'index' && name && sql
+          raw_indexes << { name: name, tbl_name: tbl_name, root_page: root_page, sql: sql }
+        end
+      end
 
-        columns, has_rowid_pk, column_affinities = parse_create_table(sql)
-        schema[name.downcase] = {
-          name: name,
-          root_page: root_page,
-          columns: columns,
-          column_affinities: column_affinities,
-          has_rowid_pk: has_rowid_pk,
-          sql: sql
-        }
+      # Parse indexes after all tables are loaded
+      raw_indexes.each do |idx_info|
+        index_data = parse_create_index(idx_info[:sql], idx_info[:tbl_name], schema)
+        next unless index_data
+
+        index_data[:name] = idx_info[:name]
+        index_data[:root_page] = idx_info[:root_page]
+
+        table_key = idx_info[:tbl_name].downcase
+        @indexes[table_key] ||= []
+        @indexes[table_key] << index_data
       end
 
       schema
+    end
+
+    # Parse CREATE INDEX statement to extract indexed columns
+    def parse_create_index(sql, tbl_name, schema)
+      return nil unless sql
+
+      match = sql.match(/CREATE\s+(?:UNIQUE\s+)?INDEX\s+["']?(\w+)["']?\s+ON\s+["']?(\w+)["']?\s*\(([^)]+)\)/i)
+      return nil unless match
+
+      table_name = match[2].downcase
+      table_info = schema[table_name]
+      return nil unless table_info
+
+      col_strs = match[3].split(',').map(&:strip)
+      indexed_columns = col_strs.map do |col_str|
+        parts = col_str.split(/\s+/)
+        col_name = parts[0].gsub(/["']/, '')
+        direction = parts[1]&.upcase == 'DESC' ? :desc : :asc
+        col_index = table_info[:columns].index { |c| c.downcase == col_name.downcase }
+        { name: col_name, col_index: col_index, direction: direction }
+      end
+
+      {
+        table_name: table_name,
+        columns: indexed_columns,
+        unique: sql.match?(/CREATE\s+UNIQUE\s+INDEX/i)
+      }
     end
 
     # Parse column names from CREATE TABLE statement

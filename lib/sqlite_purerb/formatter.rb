@@ -105,7 +105,7 @@ module SqlitePurerb
     end
 
     # Find all loop body ranges for indentation
-    # Handles Rewind/Next, SorterSort/SorterNext, and Sort/Next loops
+    # Handles Rewind/Next, SeekGE/Next, SorterSort/SorterNext, and Sort/Next loops
     def find_loop_body_range(program)
       ranges = []
 
@@ -118,6 +118,18 @@ module SqlitePurerb
           ranges << (rewind_addr + 1...addr)
           rewind_addr = nil
           break  # Only first Rewind/Next pair for the main scan loop
+        end
+      end
+
+      # Find SeekGE -> Next pair (index scan loop)
+      seek_addr = nil
+      program.instructions.each_with_index do |instr, addr|
+        if instr.opcode == VDBE::OP::SEEK_GE
+          seek_addr = addr
+        elsif instr.opcode == VDBE::OP::NEXT && seek_addr
+          ranges << (seek_addr + 1...addr)
+          seek_addr = nil
+          break
         end
       end
 

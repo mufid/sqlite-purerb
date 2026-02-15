@@ -70,6 +70,12 @@ module SqlitePurerb
     DISPATCH[VDBE::OP::SORT]           = Read::OpSort
     DISPATCH[VDBE::OP::IDX_INSERT]     = Read::OpIdxInsert
 
+    # Index scan operations
+    DISPATCH[VDBE::OP::SEEK_GE]        = Read::OpSeekGE
+    DISPATCH[VDBE::OP::IDX_GT]         = Read::OpIdxGT
+    DISPATCH[VDBE::OP::DEFERRED_SEEK]  = Read::OpDeferredSeek
+    DISPATCH[VDBE::OP::IDX_ROWID]      = Read::OpIdxRowid
+
     DISPATCH.freeze
   end
 end

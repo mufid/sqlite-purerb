@@ -116,7 +116,7 @@ module SqlitePurerb
       def emit_epilogue(init_addr, open_addr, _cursor)
         @program.add(OP::HALT)
 
-        transaction_addr = @program.add(OP::TRANSACTION, p3: 1, p4: 0, p5: 1,
+        transaction_addr = @program.add(OP::TRANSACTION, p3: @schema_cookie, p4: 0, p5: 1,
                                          comment: 'usesStmtJournal=0')
         @program.patch(init_addr, p2: transaction_addr)
         @program.instructions[init_addr].comment = "Start at #{transaction_addr}"

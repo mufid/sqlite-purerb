@@ -20,10 +20,13 @@ module SqlitePurerb
     include CodeGenerators::CompileLimit
     include CodeGenerators::CompileSorter
     include CodeGenerators::CompileTopN
+    include CodeGenerators::CompileIndexScan
     include CodeGenerators::CompileSelect
 
-    def initialize(schema)
+    def initialize(schema, indexes: {}, schema_cookie: 1)
       @schema = schema
+      @indexes = indexes
+      @schema_cookie = schema_cookie
       @program = VDBE::Program.new
       @next_register = 1  # Register 0 is reserved
       @next_cursor = 0

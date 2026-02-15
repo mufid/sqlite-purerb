@@ -6,7 +6,7 @@ module SqlitePurerb
     HEADER_SIZE = 100
     MAGIC_STRING = "SQLite format 3\x00"
 
-    attr_reader :page_size, :page_count, :text_encoding
+    attr_reader :page_size, :page_count, :text_encoding, :schema_cookie
 
     def initialize(file_path)
       @file = File.open(file_path, 'rb')
@@ -49,6 +49,10 @@ module SqlitePurerb
         file_size = @file.tell
         @page_count = file_size / @page_size
       end
+
+      # Schema cookie (bytes 40-43, big-endian)
+      # Incremented each time the schema changes (CREATE/DROP TABLE/INDEX)
+      @schema_cookie = read_be32(header, 40)
 
       # Text encoding (bytes 56-59)
       # 1 = UTF-8, 2 = UTF-16LE, 3 = UTF-16BE

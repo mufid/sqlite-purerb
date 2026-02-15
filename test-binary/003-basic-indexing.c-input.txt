@@ -1,0 +1,7 @@
+.headers on
+.mode list
+SELECT * FROM employees;
+SELECT * FROM employees WHERE department = 'engineering';
+SELECT * FROM employees WHERE department = 'sales';
+EXPLAIN SELECT * FROM employees;
+EXPLAIN SELECT * FROM employees WHERE department = 'engineering';

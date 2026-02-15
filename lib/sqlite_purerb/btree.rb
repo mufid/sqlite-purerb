@@ -23,7 +23,96 @@ module SqlitePurerb
       scan_page(root_page, &block)
     end
 
+    # Scan all entries from an index starting at root_page
+    # Yields [key_values_array] for each entry
+    # The last element of key_values is always the rowid
+    def scan_index(root_page, &block)
+      return enum_for(:scan_index, root_page) unless block_given?
+
+      scan_index_page(root_page, &block)
+    end
+
     private
+
+    def scan_index_page(page_num, &block)
+      page_data = @pager.read_page(page_num)
+
+      header_offset = page_num == 1 ? 100 : 0
+
+      flags = page_data.getbyte(header_offset)
+      cell_count = read_be16(page_data, header_offset + 3)
+
+      is_leaf = (flags & PTF_LEAF) != 0
+
+      cell_ptr_offset = header_offset + (is_leaf ? 8 : 12)
+
+      if is_leaf
+        cell_count.times do |i|
+          cell_offset = read_be16(page_data, cell_ptr_offset + i * 2)
+          values = parse_index_leaf_cell(page_data, cell_offset)
+          block.call(values)
+        end
+      else
+        cell_count.times do |i|
+          cell_offset = read_be16(page_data, cell_ptr_offset + i * 2)
+          left_child = read_be32(page_data, cell_offset)
+          scan_index_page(left_child, &block)
+        end
+
+        right_child = read_be32(page_data, header_offset + 8)
+        scan_index_page(right_child, &block)
+      end
+    end
+
+    # Parse an index leaf cell
+    # Format: varint(payload_size), payload (no separate rowid)
+    # The payload is a record; the last field is the table rowid
+    def parse_index_leaf_cell(page_data, offset)
+      pos = offset
+
+      payload_size, bytes_read = read_varint(page_data, pos)
+      pos += bytes_read
+
+      # Calculate local payload size for index cells
+      usable_size = @pager.page_size
+      max_local = calculate_index_max_local(usable_size)
+      min_local = calculate_index_min_local(usable_size)
+
+      if payload_size <= max_local
+        local_size = payload_size
+        overflow_page = 0
+      else
+        surplus = min_local + (payload_size - min_local) % (usable_size - 4)
+        local_size = surplus <= max_local ? surplus : min_local
+        overflow_page = read_be32(page_data, pos + local_size)
+      end
+
+      payload = page_data[pos, local_size].dup
+      payload.force_encoding('BINARY')
+
+      remaining = payload_size - local_size
+      current_overflow = overflow_page
+
+      while remaining > 0 && current_overflow != 0
+        overflow_data = @pager.read_page(current_overflow)
+        next_overflow = read_be32(overflow_data, 0)
+        chunk_size = [remaining, usable_size - 4].min
+        payload << overflow_data[4, chunk_size]
+        remaining -= chunk_size
+        current_overflow = next_overflow
+      end
+
+      decode_record(payload)
+    end
+
+    # Index B-trees use different local payload formulas than table B-trees
+    def calculate_index_max_local(usable_size)
+      ((usable_size - 12) * 64 / 255) - 23
+    end
+
+    def calculate_index_min_local(usable_size)
+      ((usable_size - 12) * 32 / 255) - 23
+    end
 
     def scan_page(page_num, &block)
       page_data = @pager.read_page(page_num)
