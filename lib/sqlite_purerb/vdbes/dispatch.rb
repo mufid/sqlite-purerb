@@ -46,6 +46,7 @@ module SqlitePurerb
     DISPATCH[VDBE::OP::NOT]            = Read::OpNot
     DISPATCH[VDBE::OP::IS_NULL]        = Read::OpIsNull
     DISPATCH[VDBE::OP::NOT_NULL]       = Read::OpNotNull
+    DISPATCH[VDBE::OP::NOOP]          = Read::OpNoop
 
     # Sorter operations (ORDER BY)
     DISPATCH[VDBE::OP::SORTER_OPEN]    = Read::OpSorterOpen

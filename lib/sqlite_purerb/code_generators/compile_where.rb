@@ -22,6 +22,12 @@ module SqlitePurerb
           compile_is_null_filter(expr, cursor, table_columns, column_affinities, alias_map)
         when AST::IsNotNullExpr
           compile_is_not_null_filter(expr, cursor, table_columns, column_affinities, alias_map)
+        when AST::IsExpr
+          compile_is_filter(expr, cursor, table_columns, column_affinities, alias_map)
+        when AST::IsNotExpr
+          compile_is_not_filter(expr, cursor, table_columns, column_affinities, alias_map)
+        when AST::InExpr
+          compile_in_filter(expr, cursor, table_columns, column_affinities, alias_map)
         when AST::AndExpr
           left_jump = compile_where_filter(expr.left, cursor, table_columns, column_affinities, alias_map, and_jumps)
           and_jumps << left_jump if left_jump
@@ -72,6 +78,55 @@ module SqlitePurerb
                                                     column_affinities, alias_map)
         @program.add(OP::IS_NULL, p1: col_reg, p2: 0,
                      comment: "if r[#{col_reg}]==NULL goto %s")
+      end
+
+      # IS value: emit Column + Ne with NULLEQ flag (skip if not IS-equal)
+      def compile_is_filter(expr, cursor, table_columns, column_affinities, alias_map)
+        col_reg = emit_where_column(expr.left, cursor, table_columns, alias_map, p5: 0)
+        const_reg = emit_where_constant(expr.right)
+
+        p5_val = is_comparison_p5(expr.right)
+        @program.add(OP::NE, p1: const_reg, p2: 0, p3: col_reg, p4: 'BINARY-8', p5: p5_val,
+                     comment: "if r[#{col_reg}]!=r[#{const_reg}] goto %s")
+      end
+
+      # IS NOT value: emit Column + Eq with NULLEQ flag (skip if IS-equal)
+      def compile_is_not_filter(expr, cursor, table_columns, column_affinities, alias_map)
+        col_reg = emit_where_column(expr.left, cursor, table_columns, alias_map, p5: 0)
+        const_reg = emit_where_constant(expr.right)
+
+        p5_val = is_comparison_p5(expr.right)
+        @program.add(OP::EQ, p1: const_reg, p2: 0, p3: col_reg, p4: 'BINARY-8', p5: p5_val,
+                     comment: "if r[#{col_reg}]==r[#{const_reg}] goto %s")
+      end
+
+      # IN (val1, val2): Noop + Column + Eq(non-inverted) + Ne(inverted)
+      # Only supports 2-value IN expressions
+      def compile_in_filter(expr, cursor, table_columns, column_affinities, alias_map)
+        raise "IN with #{expr.values.length} values not yet supported (only 2)" unless expr.values.length == 2
+
+        # Noop marker
+        @program.add(OP::NOOP, comment: 'begin IN expr')
+
+        # Read column
+        col_reg = emit_where_column(expr.operand, cursor, table_columns, alias_map, p5: 0)
+
+        # Determine affinity-only p5 (no JUMPIFNULL for first Eq)
+        affinity_p5 = in_affinity_p5(expr.values.first)
+
+        # First value: Eq (non-inverted, jump to output if match)
+        # Note: P1=col_reg, P3=const_reg (swapped vs regular comparison)
+        const1_reg = emit_where_constant(expr.values[0])
+        eq_addr = @program.add(OP::EQ, p1: col_reg, p2: 0, p3: const1_reg,
+                               p4: 'BINARY-8', p5: affinity_p5,
+                               comment: "if r[#{const1_reg}]==r[#{col_reg}] goto %s")
+        @or_output_jumps << eq_addr
+
+        # Last value: Ne (inverted, jump to skip if no match)
+        const2_reg = emit_where_constant(expr.values[1])
+        @program.add(OP::NE, p1: col_reg, p2: 0, p3: const2_reg,
+                     p4: 'BINARY-8', p5: affinity_p5 | 0x10,
+                     comment: "if r[#{const2_reg}]!=r[#{col_reg}] goto %s; end IN expr")
       end
 
       # OR short-circuit: first N-1 branches jump to output if TRUE,
@@ -237,6 +292,24 @@ module SqlitePurerb
           ['BINARY-8', 82]   # AFF_TEXT(0x42) | JUMPIFNULL(0x10)
         else
           ['BINARY-8', 84]   # AFF_INTEGER(0x44) | JUMPIFNULL(0x10)
+        end
+      end
+
+      # Determine p5 for IS/IS NOT comparisons (NULLEQ flag)
+      def is_comparison_p5(value_node)
+        if value_node.is_a?(AST::Literal) && value_node.value.is_a?(String)
+          0x80 | 0x42   # NULLEQ | AFF_TEXT = 194
+        else
+          0x80 | 0x44   # NULLEQ | AFF_INTEGER = 196
+        end
+      end
+
+      # Determine affinity-only p5 for IN expressions (no JUMPIFNULL)
+      def in_affinity_p5(value_node)
+        if value_node.is_a?(AST::Literal) && value_node.value.is_a?(String)
+          0x42   # AFF_TEXT = 66
+        else
+          0x44   # AFF_INTEGER = 68
         end
       end
 

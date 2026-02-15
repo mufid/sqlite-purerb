@@ -51,6 +51,7 @@ module SqlitePurerb
       NOT            = 54  # reg[P2] = NOT reg[P1]
       IS_NULL        = 55  # Jump to P2 if reg[P1] is NULL
       NOT_NULL       = 56  # Jump to P2 if reg[P1] is not NULL
+      NOOP           = 57  # No operation (marker for IN expressions)
 
       # Sorter operations (ORDER BY)
       SORTER_OPEN    = 60  # Open sorter cursor P1, P4=key info
@@ -114,6 +115,7 @@ module SqlitePurerb
         NOT => 'Not',
         IS_NULL => 'IsNull',
         NOT_NULL => 'NotNull',
+        NOOP => 'Noop',
         SORTER_OPEN => 'SorterOpen',
         MAKE_RECORD => 'MakeRecord',
         SORTER_INSERT => 'SorterInsert',

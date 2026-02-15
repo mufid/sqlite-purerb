@@ -114,5 +114,35 @@ module SqlitePurerb
         @operand = operand
       end
     end
+
+    # Represents IS <value> expression (NULLEQ comparison)
+    class IsExpr < Node
+      attr_accessor :left, :right
+
+      def initialize(left, right)
+        @left = left
+        @right = right
+      end
+    end
+
+    # Represents IS NOT <value> expression (NULLEQ comparison)
+    class IsNotExpr < Node
+      attr_accessor :left, :right
+
+      def initialize(left, right)
+        @left = left
+        @right = right
+      end
+    end
+
+    # Represents IN (val1, val2) expression
+    class InExpr < Node
+      attr_accessor :operand, :values
+
+      def initialize(operand, values)
+        @operand = operand
+        @values = values
+      end
+    end
   end
 end

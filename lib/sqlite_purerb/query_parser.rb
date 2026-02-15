@@ -100,7 +100,7 @@ module SqlitePurerb
       tokens
     end
 
-    KEYWORDS = %w[SELECT FROM WHERE AND OR AS ORDER BY ASC DESC LIMIT OFFSET IS NOT NULL].freeze
+    KEYWORDS = %w[SELECT FROM WHERE AND OR AS ORDER BY ASC DESC LIMIT OFFSET IS NOT NULL IN].freeze
 
     def keyword?(word)
       KEYWORDS.include?(word.upcase)
@@ -250,15 +250,37 @@ module SqlitePurerb
     def parse_comparison
       left = parse_primary
 
-      # Handle IS NULL / IS NOT NULL
+      # Handle IS NULL / IS NOT NULL / IS value / IS NOT value
       if accept(:IS)
         if accept(:NOT)
-          expect(:NULL)
-          return AST::IsNotNullExpr.new(left)
+          if peek(:NULL)
+            accept(:NULL)
+            return AST::IsNotNullExpr.new(left)
+          else
+            right = parse_primary
+            return AST::IsNotExpr.new(left, right)
+          end
         else
-          expect(:NULL)
-          return AST::IsNullExpr.new(left)
+          if peek(:NULL)
+            accept(:NULL)
+            return AST::IsNullExpr.new(left)
+          else
+            right = parse_primary
+            return AST::IsExpr.new(left, right)
+          end
         end
+      end
+
+      # Handle IN (val1, val2)
+      if accept(:IN)
+        expect(:LPAREN)
+        values = []
+        loop do
+          values << parse_primary
+          break unless accept(:COMMA)
+        end
+        expect(:RPAREN)
+        return AST::InExpr.new(left, values)
       end
 
       op = nil
