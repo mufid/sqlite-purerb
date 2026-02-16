@@ -4,6 +4,66 @@ A pure Ruby implementation of the SQLite database file format and SQL query engi
 
 The status is experimental project.
 
+## Usage
+
+### CLI
+
+An interactive REPL is available at `bin/sqlite-purerb`. It works like the C `sqlite3` shell:
+
+```sh
+# Interactive mode
+bin/sqlite-purerb path/to/database.sqlite3
+sqlite-purerb> .headers on
+sqlite-purerb> SELECT * FROM my_table LIMIT 5;
+
+# Piped mode
+echo "SELECT * FROM my_table;" | bin/sqlite-purerb path/to/database.sqlite3
+```
+
+Supported dot-commands: `.headers on|off`, `.mode list`, `.separator <sep>`, `.quit`, `.exit`.
+
+### REPL (from Ruby code)
+
+`SqlitePurerb::REPL` processes batch SQL input and produces formatted output, matching the C sqlite3 shell's behavior:
+
+```ruby
+require 'sqlite_purerb'
+
+repl = SqlitePurerb::REPL.new('path/to/database.sqlite3')
+
+output = repl.process(<<~SQL)
+  .headers on
+  SELECT * FROM my_table LIMIT 5;
+SQL
+puts output
+
+repl.close
+```
+
+### Direct API
+
+Use `SqlitePurerb::Database` for programmatic access. Queries return an array of hashes keyed by column name:
+
+```ruby
+require 'sqlite_purerb'
+
+db = SqlitePurerb::Database.new('path/to/database.sqlite3')
+
+# Execute a query
+rows = db.execute('SELECT id, name FROM users')
+rows.each { |row| puts row.inspect }
+# => {"id"=>1, "name"=>"Alice"}
+# => {"id"=>2, "name"=>"Bob"}
+
+# List tables
+puts db.tables
+
+# Show EXPLAIN bytecode for a query
+puts db.explain('SELECT * FROM users')
+
+db.close
+```
+
 ## Building
 
 Development and testing require two sibling directories next to `sqlite-purerb`:
@@ -94,50 +154,6 @@ rake test_c_rb TESTNAME=affinity2 FAILFAST=yes
 
 # Run unit tests.
 rake test
-```
-
-## Usage
-
-### REPL
-
-`SqlitePurerb::REPL` processes batch SQL input and produces formatted output, matching the C sqlite3 shell's behavior for dot-commands and query results:
-
-```ruby
-require 'sqlite_purerb'
-
-repl = SqlitePurerb::REPL.new('path/to/database.sqlite3')
-
-output = repl.process(<<~SQL)
-  .headers on
-  SELECT * FROM my_table LIMIT 5;
-SQL
-puts output
-
-repl.close
-```
-
-### Direct API
-
-Use `SqlitePurerb::Database` for programmatic access. Queries return an array of hashes keyed by column name:
-
-```ruby
-require 'sqlite_purerb'
-
-db = SqlitePurerb::Database.new('path/to/database.sqlite3')
-
-# Execute a query
-rows = db.execute('SELECT id, name FROM users')
-rows.each { |row| puts row.inspect }
-# => {"id"=>1, "name"=>"Alice"}
-# => {"id"=>2, "name"=>"Bob"}
-
-# List tables
-puts db.tables
-
-# Show EXPLAIN bytecode for a query
-puts db.explain('SELECT * FROM users')
-
-db.close
 ```
 
 ## Installation
